@@ -978,13 +978,13 @@ function showHistDetail(date, wName) {
   const dateLabel = new Date(date+"T12:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
   overlay.innerHTML = `
     <div style="padding:20px 16px;max-width:600px;margin:0 auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-top:8px;">
         <div>
           <div style="color:#e8ff00;font-weight:900;font-size:18px">${PLAN_EMOJIS[wName]||"💪"} ${wName}</div>
           <div style="color:#555;font-size:12px;margin-top:2px">${dateLabel}</div>
         </div>
-        <button id="hist-detail-close" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:10px 16px;color:#fff;cursor:pointer;font-size:14px;font-family:inherit;">✕ Cerrar</button>
       </div>
+      <button id="hist-detail-close" style="width:100%;padding:14px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;color:#fff;cursor:pointer;font-size:15px;font-family:inherit;margin-bottom:16px;">✕ Cerrar detalle</button>
       ${exRows || '<div style="color:#555;text-align:center;padding:40px">Sin series completadas</div>'}
     </div>
   `;
