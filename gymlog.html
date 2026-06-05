@@ -298,6 +298,17 @@ function showSaved() {
   saveTimer = setTimeout(() => { el.textContent = "AUTO-SAVE"; el.style.color = "#333"; }, 1500);
 }
 
+// Busca la última sesión anterior de un ejercicio (no hoy)
+function getLastSession(wName, exName) {
+  const dk = today();
+  const dates = Object.keys(DB.sessions).filter(d => d !== dk).sort().reverse();
+  for (const date of dates) {
+    const ex = DB.sessions[date]?.[wName]?.[exName];
+    if (ex?.sets?.some(s => s.done)) return { date, sets: ex.sets.filter(s => s.done) };
+  }
+  return null;
+}
+
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -405,6 +416,52 @@ function openWorkout(wName) {
   renderWorkout();
 }
 
+function renderInlineSupps() {
+  const dk = today();
+  const supps = DB.supplements[dk] || {};
+  const items = [
+    {key:"creatina", label:"Creatina",  dose:"5g",   emoji:"⚗️"},
+    {key:"proteina", label:"Proteína",  dose:"1 scoop", emoji:"🥛"},
+    {key:"cafe",     label:"Cafeína",   dose:"1 taza",  emoji:"☕"},
+    {key:"agua",     label:"Agua",      dose:"2.5L",    emoji:"💧"},
+    {key:"vitamina", label:"Vitaminas", dose:"",        emoji:"💊"},
+  ];
+  const rows = items.map(item => {
+    const log = supps[item.key] || {};
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #111;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px">${item.emoji}</span>
+        <div>
+          <div style="font-size:13px;color:${log.taken?'#e8ff00':'#aaa'};font-weight:${log.taken?'700':'400'}">${log.taken?'✓ ':''}${item.label}</div>
+          ${log.taken&&log.time?`<div style="color:#4a6a00;font-size:10px">${log.time}hs</div>`:`<div style="color:#444;font-size:10px">${item.dose}</div>`}
+        </div>
+      </div>
+      <button onclick="toggleSuppInline('${item.key}')" style="
+        width:36px;height:36px;border-radius:10px;
+        background:${log.taken?'#e8ff00':'#1a1a1a'};
+        border:1.5px solid ${log.taken?'#e8ff00':'#2a2a2a'};
+        color:${log.taken?'#000':'#555'};
+        font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+      ">${log.taken?'✓':'○'}</button>
+    </div>`;
+  }).join("");
+
+  return `<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:16px;padding:16px;margin-top:16px;">
+    <div style="color:#666;font-size:10px;letter-spacing:3px;margin-bottom:4px">⚗️ SUPLEMENTOS DE HOY</div>
+    ${rows}
+  </div>`;
+}
+
+function toggleSuppInline(key) {
+  const dk = today();
+  if (!DB.supplements[dk]) DB.supplements[dk] = {};
+  const cur = DB.supplements[dk][key] || {};
+  const now = new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+  DB.supplements[dk][key] = {taken:!cur.taken, time:!cur.taken?now:null};
+  save();
+  renderWorkout();
+}
+
 function renderWorkout() {
   const wName = currentWorkout;
   const plan = DB.plans[wName];
@@ -440,6 +497,9 @@ function renderWorkout() {
     <div class="legend">${legendHtml}</div>
     ${exHtml}
     <button onclick="openNewExercise('${wName}')" style="width:100%;padding:14px;background:#111;border:1px solid #2a2a2a;border-radius:14px;color:#666;cursor:pointer;font-size:14px;margin-top:8px">+ Agregar ejercicio</button>
+
+    ${renderInlineSupps()}
+
     <button onclick="finishWorkout('${wName}')" style="width:100%;padding:16px;background:#e8ff00;color:#000;border:none;border-radius:14px;cursor:pointer;font-size:15px;font-weight:900;letter-spacing:1px;margin-top:12px;margin-bottom:8px">
       🏁 FINALIZAR ENTRENO
     </button>
@@ -449,7 +509,33 @@ function renderWorkout() {
 function renderExCard(wName, ex, data, exIdx) {
   const sets = data?.sets || mkSets(ex.ds);
   const allDone = sets.length>0 && sets.every(s=>s.done);
-  const setRows = sets.map((set,i)=>renderSetRow(wName, ex.name, set, i, sets)).join("");
+  const last = getLastSession(wName, ex.name);
+  const setRows = sets.map((set,i)=>renderSetRow(wName, ex.name, set, i, sets, last?.sets[i])).join("");
+
+  // Resumen de última sesión
+  let lastHtml = "";
+  if (last) {
+    const lastDate = new Date(last.date+"T12:00:00").toLocaleDateString("es-AR",{day:"numeric",month:"short"});
+    const bestSet = last.sets.reduce((best,s) => (parseFloat(s.weight)||0) > (parseFloat(best.weight)||0) ? s : best, last.sets[0]);
+    const summary = last.sets.map((s,i) => {
+      let parts = [];
+      if(s.reps) parts.push(s.reps+"rep");
+      if(s.forced) parts.push(s.forced+"F");
+      if(s.negative) parts.push(s.negative+"NEG");
+      if(s.restpause) parts.push(s.restpause+"RP");
+      return `<span style="color:#444">${s.weight||"-"}kg×${parts.join("+")||s.reps||"-"}</span>`;
+    }).join(" <span style='color:#2a2a2a'>|</span> ");
+    lastHtml = `<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="color:#555;font-size:9px;letter-spacing:2px;margin-bottom:3px">ÚLTIMA VEZ · ${lastDate}</div>
+        <div style="font-size:12px;line-height:1.6">${summary}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;margin-left:8px">
+        <div style="color:#3a8fff;font-size:16px;font-weight:900">${bestSet.weight||"-"}kg</div>
+        <div style="color:#444;font-size:9px">mejor</div>
+      </div>
+    </div>`;
+  }
 
   return `
   <div class="card ${allDone?"done":""}" id="card-${wName}-${ex.name.replace(/\s/g,'_')}">
@@ -463,6 +549,7 @@ function renderExCard(wName, ex, data, exIdx) {
         <button class="icon-btn" onclick="openEditExercise('${wName}','${ex.name}')">✏️</button>
       </div>
     </div>
+    ${lastHtml}
     <div class="set-grid header"><div>TIPO</div><div>KG</div><div>REPS</div><div>+</div><div>✓</div></div>
     ${setRows}
     <div class="add-set-row">
@@ -474,7 +561,7 @@ function renderExCard(wName, ex, data, exIdx) {
   </div>`;
 }
 
-function renderSetRow(wName, exName, set, idx, allSets) {
+function renderSetRow(wName, exName, set, idx, allSets, lastSet) {
   const st = stType(set.type||"N");
   const hasExtras = !!(set.forced||set.negative||set.restpause);
   function summary() {
@@ -491,10 +578,11 @@ function renderSetRow(wName, exName, set, idx, allSets) {
   <div class="set-grid" style="margin-bottom:${hasExtras?"4":"6"}px">
     <button class="type-btn" style="background:${set.done?st.color:"#1a1a1a"};border-color:${st.color};color:${set.done?st.tc:st.color}"
       onclick="openTypeOverlay('${wName}','${exName}',${idx})">${st.label}</button>
-    <input class="inp" type="number" placeholder="kg" value="${set.weight||""}"
-      oninput="updateSet('${wName}','${exName}',${idx},'weight',this.value)">
+    <input class="inp" type="number" placeholder="${lastSet?lastSet.weight:'kg'}" value="${set.weight||""}"
+      oninput="updateSet('${wName}','${exName}',${idx},'weight',this.value)"
+      style="background:#111;border:1px solid ${(lastSet&&!set.weight)?'#1a3a1a':'#222'};border-radius:8px;padding:8px 6px;color:#fff;font-size:14px;width:100%;outline:none;text-align:center;">
     <div>
-      <input class="inp" type="number" placeholder="reps" value="${set.reps||""}"
+      <input class="inp" type="number" placeholder="${lastSet?lastSet.reps:'reps'}" value="${set.reps||""}"
         oninput="updateSet('${wName}','${exName}',${idx},'reps',this.value)">
       ${hasExtras?`<div style="text-align:center;font-size:9px;color:#5a9a5a;margin-top:2px">${summary()}</div>`:""}
     </div>
@@ -529,7 +617,10 @@ function getOrInitSession(wName, exName) {
   if (!DB.sessions[dk][wName]) DB.sessions[dk][wName] = {};
   const plan = DB.plans[wName];
   const ex = plan.exercises.find(e=>e.name===exName);
-  if (!DB.sessions[dk][wName][exName]) DB.sessions[dk][wName][exName] = {sets: mkSets(ex.ds), note:""};
+  // Solo inicializar si NO existe ya — nunca sobreescribir datos existentes
+  if (!DB.sessions[dk][wName][exName] || !DB.sessions[dk][wName][exName].sets) {
+    DB.sessions[dk][wName][exName] = {sets: mkSets(ex.ds), note:""};
+  }
   return DB.sessions[dk][wName][exName];
 }
 
@@ -690,12 +781,16 @@ function showFinishSummary(wName, stats) {
         </div>
       </div>
 
-      <button onclick="this.closest('div[style]').remove();switchTab('home');" style="width:100%;padding:16px;background:#e8ff00;color:#000;border:none;border-radius:14px;cursor:pointer;font-weight:900;font-size:15px;letter-spacing:1px;">
+      <button id="finish-close-btn" style="width:100%;padding:16px;background:#e8ff00;color:#000;border:none;border-radius:14px;cursor:pointer;font-weight:900;font-size:15px;letter-spacing:1px;">
         VER MI PROGRESO →
       </button>
     </div>
   `;
   document.body.appendChild(overlay);
+  document.getElementById("finish-close-btn").onclick = function() {
+    overlay.remove();
+    switchTab("home");
+  };
 }
 
 // ─── EDIT / ADD EXERCISE ──────────────────────────────────────────────────────
@@ -847,6 +942,56 @@ function toggleSupp(key) {
 }
 
 // ─── HISTORIAL ────────────────────────────────────────────────────────────────
+function showHistDetail(date, wName) {
+  const wd = DB.sessions[date]?.[wName];
+  const plan = DB.plans[wName];
+  if (!wd || !plan) return;
+
+  let exRows = "";
+  plan.exercises.forEach(ex => {
+    const exData = wd[ex.name];
+    if (!exData || !exData.sets) return;
+    const doneSets = exData.sets.filter(s => s.done);
+    if (doneSets.length === 0) return;
+
+    let setsHtml = doneSets.map((s,i) => {
+      const st = stType(s.type||"N");
+      let extra = "";
+      if (s.forced)    extra += ` <span style="color:#ff3ab0">${s.forced}F</span>`;
+      if (s.negative)  extra += ` <span style="color:#b03aff">${s.negative}NEG</span>`;
+      if (s.restpause) extra += ` <span style="color:#3affb0">${s.restpause}RP</span>`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1a1a1a;">
+        <span style="width:24px;height:24px;border-radius:6px;background:${st.color};color:${st.tc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0">${st.label}</span>
+        <span style="color:#fff;font-size:14px;font-weight:700">${s.weight||"-"}kg × ${s.reps||"-"}${extra}</span>
+      </div>`;
+    }).join("");
+
+    exRows += `<div style="background:#111;border-radius:12px;padding:14px;margin-bottom:10px;">
+      <div style="color:#e8ff00;font-weight:700;margin-bottom:8px">${ex.name}</div>
+      ${setsHtml}
+      ${exData.note ? `<div style="color:#555;font-size:12px;margin-top:8px;font-style:italic">${exData.note}</div>` : ""}
+    </div>`;
+  });
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:2000;overflow-y:auto;";
+  const dateLabel = new Date(date+"T12:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
+  overlay.innerHTML = `
+    <div style="padding:20px 16px;max-width:600px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div>
+          <div style="color:#e8ff00;font-weight:900;font-size:18px">${PLAN_EMOJIS[wName]||"💪"} ${wName}</div>
+          <div style="color:#555;font-size:12px;margin-top:2px">${dateLabel}</div>
+        </div>
+        <button id="hist-detail-close" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:10px 16px;color:#fff;cursor:pointer;font-size:14px;font-family:inherit;">✕ Cerrar</button>
+      </div>
+      ${exRows || '<div style="color:#555;text-align:center;padding:40px">Sin series completadas</div>'}
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById("hist-detail-close").onclick = () => overlay.remove();
+}
+
 function deleteSession(date, wName) {
   // Custom confirm modal (Safari PWA bloquea confirm())
   const overlay = document.createElement("div");
@@ -894,7 +1039,11 @@ function deleteSession(date, wName) {
 function renderHistory() {
   const dates=Object.keys(DB.sessions).sort().reverse().slice(0,30);
   let html=`<div class="sec-title">HISTORIAL</div>`;
-  if (!dates.length) { html+=`<div style="text-align:center;padding:60px;color:#444"><div style="font-size:40px;margin-bottom:16px">📋</div>Sin historial aún.</div>`; }
+  // Also collect days with supplements but no workout
+  const suppDates = Object.keys(DB.supplements||{}).filter(d => !DB.sessions[d] || Object.keys(DB.sessions[d]).length===0).sort().reverse().slice(0,30);
+  const allDates = [...new Set([...dates, ...suppDates])].sort().reverse().slice(0,30);
+
+  if (!allDates.length) { html+=`<div style="text-align:center;padding:60px;color:#444"><div style="font-size:40px;margin-bottom:16px">📋</div>Sin historial aún.</div>`; }
   dates.forEach(date=>{
     Object.keys(DB.sessions[date]).forEach(wName=>{
       const plan=DB.plans[wName]; if(!plan) return;
@@ -903,22 +1052,42 @@ function renderHistory() {
       const vol=Object.values(wd).reduce((a,ex)=>a+(ex.sets?.reduce((b,s)=>b+(s.done?(parseFloat(s.weight)||0)*(parseInt(s.reps)||0):0),0)||0),0);
       const types={};
       Object.values(wd).forEach(ex=>ex.sets?.filter(s=>s.done).forEach(s=>{const t=s.type||"N";types[t]=(types[t]||0)+1;}));
+      // Suplementos de ese día
+      const daySupps = DB.supplements[date] || {};
+      const suppItems = [
+        {key:"creatina",label:"Creatina",emoji:"⚗️"},
+        {key:"proteina",label:"Proteína",emoji:"🥛"},
+        {key:"cafe",    label:"Cafeína", emoji:"☕"},
+        {key:"agua",    label:"Agua",    emoji:"💧"},
+        {key:"vitamina",label:"Vitaminas",emoji:"💊"},
+      ];
+      const suppTaken = suppItems.filter(s => daySupps[s.key]?.taken);
+      const suppHtml = suppTaken.length > 0
+        ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a1a;">
+            <div style="color:#444;font-size:9px;letter-spacing:2px;width:100%;margin-bottom:2px">SUPLEMENTOS</div>
+            ${suppTaken.map(s=>`<div style="display:flex;align-items:center;gap:4px;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:6px;padding:3px 8px;">
+              <span>${s.emoji}</span>
+              <span style="color:#5aaa5a;font-size:11px">${s.label}</span>
+              ${daySupps[s.key].time?`<span style="color:#444;font-size:10px">${daySupps[s.key].time}hs</span>`:""}
+            </div>`).join("")}
+          </div>`
+        : "";
       const dateLabel=new Date(date+"T12:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
       const fin = wd.__finished;
       const typeTags=Object.entries(types).map(([type,count])=>{
         const st=stType(type);
         return `<div class="tag"><div class="dot" style="background:${st.color};color:${st.tc}">${st.label}</div><span style="color:#666;font-size:11px">×${count}</span></div>`;
       }).join("");
-      html+=`<div class="hist-row" id="hist-${date}-${wName.replace(/\s/g,'_')}">
+      html+=`<div class="hist-row" id="hist-${date}-${wName.replace(/\s/g,'_')}" onclick="showHistDetail('${date}','${wName}')" style="cursor:pointer;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="flex:1">
-            <div style="color:#e8ff00;font-weight:700">${PLAN_EMOJIS[wName]||"💪"} ${wName}</div>
+            <div style="color:#e8ff00;font-weight:700">${PLAN_EMOJIS[wName]||"💪"} ${wName} <span style="color:#444;font-size:11px">› ver detalle</span></div>
             <div style="color:#555;font-size:12px;margin-top:2px">${dateLabel}${fin?' · '+fin.time+'hs':''}</div>
           </div>
           <div style="text-align:right;margin-left:12px">
             <div style="font-weight:700">${tot} series</div>
             <div style="color:#555;font-size:12px">${Math.round(vol).toLocaleString()} kg vol.</div>
-            <button onclick="deleteSession('${date}','${wName}')" style="margin-top:6px;background:#1a0a0a;border:1px solid #3a1a1a;border-radius:8px;color:#ff5a5a;padding:4px 10px;cursor:pointer;font-size:11px;">🗑 Borrar</button>
+            <button onclick="event.stopPropagation();deleteSession('${date}','${wName}')" style="margin-top:6px;background:#1a0a0a;border:1px solid #3a1a1a;border-radius:8px;color:#ff5a5a;padding:4px 10px;cursor:pointer;font-size:11px;">🗑 Borrar</button>
           </div>
         </div>
         ${fin?`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
@@ -936,9 +1105,37 @@ function renderHistory() {
           </div>
         </div>`:''}
         <div style="display:flex;flex-wrap:wrap;gap:4px">${typeTags}</div>
+        ${suppHtml}
       </div>`;
     });
   });
+
+  // Días con solo suplementos (sin entreno)
+  suppDates.forEach(date => {
+    const daySupps = DB.supplements[date] || {};
+    const suppItems = [
+      {key:"creatina",label:"Creatina",emoji:"⚗️"},
+      {key:"proteina",label:"Proteína",emoji:"🥛"},
+      {key:"cafe",    label:"Cafeína", emoji:"☕"},
+      {key:"agua",    label:"Agua",    emoji:"💧"},
+      {key:"vitamina",label:"Vitaminas",emoji:"💊"},
+    ];
+    const suppTaken = suppItems.filter(s => daySupps[s.key]?.taken);
+    if (!suppTaken.length) return;
+    const dateLabel = new Date(date+"T12:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
+    html += `<div class="hist-row">
+      <div style="color:#5aaa5a;font-weight:700;margin-bottom:6px">⚗️ Suplementos</div>
+      <div style="color:#555;font-size:12px;margin-bottom:10px">${dateLabel}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${suppTaken.map(s=>`<div style="display:flex;align-items:center;gap:4px;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:6px;padding:4px 10px;">
+          <span>${s.emoji}</span>
+          <span style="color:#5aaa5a;font-size:12px">${s.label}</span>
+          ${daySupps[s.key].time?`<span style="color:#444;font-size:11px">${daySupps[s.key].time}hs</span>`:""}
+        </div>`).join("")}
+      </div>
+    </div>`;
+  });
+
   document.getElementById("screen-history").innerHTML=html;
 }
 
