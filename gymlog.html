@@ -1014,14 +1014,15 @@ function saveDay() {
 }
 
 function confirmDeleteDay(rid,did) {
-  closeEditOverlay();
-  setTimeout(()=>{
-    showConfirm("🗑","¿Eliminar día?","Se eliminarán todos sus ejercicios. El historial se conserva.",()=>{
-      const r=DB.routines.find(x=>x.id===rid);
-      if(r) r.days=r.days.filter(x=>x.id!==did);
-      save(); renderDays();
-    });
-  }, 200);
+  const tRid=rid, tDid=did;
+  showConfirm("🗑","¿Eliminar día?","Se eliminarán todos sus ejercicios. El historial se conserva.", function() {
+    const r=DB.routines.find(x=>x.id===tRid);
+    if(r) r.days=r.days.filter(x=>x.id!==tDid);
+    save();
+    document.getElementById("edit-overlay").classList.remove("open");
+    editCtx=null;
+    renderDays();
+  });
 }
 
 // EDIT EXERCISE
@@ -1101,15 +1102,16 @@ function saveExercise() {
 }
 
 function confirmDeleteExercise(rid,did,exName) {
-  closeEditOverlay();
-  setTimeout(()=>{
-    showConfirm("🗑",`¿Eliminar "${exName}"?`,"El historial de este ejercicio se conserva.",()=>{
-      const r=DB.routines.find(x=>x.id===rid);
-      const d=r?.days.find(x=>x.id===did);
-      if(d) d.exercises=d.exercises.filter(e=>e.name!==exName);
-      save(); renderWorkout();
-    });
-  }, 200);
+  const tRid=rid, tDid=did, tEx=exName;
+  showConfirm("🗑",`¿Eliminar "${tEx}"?`,"El historial de este ejercicio se conserva.", function() {
+    const r=DB.routines.find(x=>x.id===tRid);
+    const d=r?.days.find(x=>x.id===tDid);
+    if(d) d.exercises=d.exercises.filter(e=>e.name!==tEx);
+    save();
+    document.getElementById("edit-overlay").classList.remove("open");
+    editCtx=null;
+    renderWorkout();
+  });
 }
 
 // ─── CONFIRM ──────────────────────────────────────────────────────────────────
