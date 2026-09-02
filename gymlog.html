@@ -973,10 +973,13 @@ function saveRoutine() {
 }
 
 function confirmDeleteRoutine(rid) {
-  showConfirm("🗑","¿Eliminar rutina?","Se eliminarán todos sus días y ejercicios. El historial se conserva.",()=>{
-    DB.routines=DB.routines.filter(x=>x.id!==rid);
-    save(); closeEditOverlay(); renderHome();
-  });
+  closeEditOverlay();
+  setTimeout(()=>{
+    showConfirm("🗑","¿Eliminar rutina?","Se eliminarán todos sus días y ejercicios. El historial se conserva.",()=>{
+      DB.routines=DB.routines.filter(x=>x.id!==rid);
+      save(); renderHome();
+    });
+  }, 200);
 }
 
 // EDIT DAY
@@ -1010,11 +1013,14 @@ function saveDay() {
 }
 
 function confirmDeleteDay(rid,did) {
-  showConfirm("🗑","¿Eliminar día?","Se eliminarán todos sus ejercicios. El historial se conserva.",()=>{
-    const r=DB.routines.find(x=>x.id===rid);
-    if(r) r.days=r.days.filter(x=>x.id!==did);
-    save(); closeEditOverlay(); renderDays();
-  });
+  closeEditOverlay();
+  setTimeout(()=>{
+    showConfirm("🗑","¿Eliminar día?","Se eliminarán todos sus ejercicios. El historial se conserva.",()=>{
+      const r=DB.routines.find(x=>x.id===rid);
+      if(r) r.days=r.days.filter(x=>x.id!==did);
+      save(); renderDays();
+    });
+  }, 200);
 }
 
 // EDIT EXERCISE
@@ -1094,12 +1100,15 @@ function saveExercise() {
 }
 
 function confirmDeleteExercise(rid,did,exName) {
-  showConfirm("🗑",`¿Eliminar "${exName}"?`,"El historial de este ejercicio se conserva.",()=>{
-    const r=DB.routines.find(x=>x.id===rid);
-    const d=r?.days.find(x=>x.id===did);
-    if(d) d.exercises=d.exercises.filter(e=>e.name!==exName);
-    save(); closeEditOverlay(); renderWorkout();
-  });
+  closeEditOverlay();
+  setTimeout(()=>{
+    showConfirm("🗑",`¿Eliminar "${exName}"?`,"El historial de este ejercicio se conserva.",()=>{
+      const r=DB.routines.find(x=>x.id===rid);
+      const d=r?.days.find(x=>x.id===did);
+      if(d) d.exercises=d.exercises.filter(e=>e.name!==exName);
+      save(); renderWorkout();
+    });
+  }, 200);
 }
 
 // ─── CONFIRM ──────────────────────────────────────────────────────────────────
