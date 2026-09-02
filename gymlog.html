@@ -973,13 +973,14 @@ function saveRoutine() {
 }
 
 function confirmDeleteRoutine(rid) {
-  closeEditOverlay();
-  setTimeout(()=>{
-    showConfirm("🗑","¿Eliminar rutina?","Se eliminarán todos sus días y ejercicios. El historial se conserva.",()=>{
-      DB.routines=DB.routines.filter(x=>x.id!==rid);
-      save(); renderHome();
-    });
-  }, 200);
+  const targetRid = rid; // capture
+  showConfirm("🗑","¿Eliminar rutina?","Se eliminarán todos sus días y ejercicios. El historial se conserva.", function() {
+    DB.routines = DB.routines.filter(x => x.id !== targetRid);
+    save();
+    document.getElementById("edit-overlay").classList.remove("open");
+    editCtx = null;
+    renderHome();
+  });
 }
 
 // EDIT DAY
@@ -1123,8 +1124,9 @@ function showConfirm(icon,title,msg,cb) {
 function closeConfirm() { document.getElementById("confirm-modal").classList.remove("open"); confirmCb=null; }
 function triggerConfirm() {
   const cb = confirmCb;
-  closeConfirm();
-  if(cb) cb();
+  confirmCb = null;
+  document.getElementById("confirm-modal").classList.remove("open");
+  if(cb) setTimeout(()=>cb(), 50);
 }
 document.getElementById("confirm-ok").onclick = triggerConfirm;
 
